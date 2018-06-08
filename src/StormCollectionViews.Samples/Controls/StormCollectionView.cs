@@ -13,11 +13,15 @@ namespace StormCollectionViews
 		private ICellFactory _factory;
 		private IStormCollectionViewSource _source;
 
+		private UIEdgeInsets _contentInset;
+
 		private UIView _container;
 		private UILayoutGuide _containerGuide;
 		
 		private NSLayoutConstraint _topContainerConstraint;
 		private NSLayoutConstraint _bottomContainerConstraint;
+		private NSLayoutConstraint _leftContainerConstraint;
+		private NSLayoutConstraint _rightContainerConstraint;
 
 		private NSLayoutConstraint _firstItemConstraint;
 		private NSLayoutConstraint _lastItemConstraint;
@@ -38,11 +42,21 @@ namespace StormCollectionViews
 			}
 		}
 
+		public override UIEdgeInsets ContentInset
+		{
+			get => _contentInset;
+			set
+			{
+				_contentInset = value;
+				UpdateInsets();
+			}
+		}
+
 		public StormCollectionView(int estimatedHeight, ICellFactory factory = null)
 		{
 			_estimatedHeight = estimatedHeight;
 			_factory = factory ?? new DefaultCellFactory();
-			
+
 			_container = new UIView
 			{
 				TranslatesAutoresizingMaskIntoConstraints = false,
@@ -67,7 +81,8 @@ namespace StormCollectionViews
 			{
 				_topContainerConstraint = _containerGuide.TopAnchor.ConstraintEqualTo(_container.TopAnchor),
 				_bottomContainerConstraint = _container.BottomAnchor.ConstraintEqualTo(_containerGuide.BottomAnchor),
-				_container.WidthAnchor.ConstraintEqualTo(_containerGuide.WidthAnchor),
+				_leftContainerConstraint = _containerGuide.LeftAnchor.ConstraintEqualTo(_container.LeftAnchor),
+				_rightContainerConstraint = _container.RightAnchor.ConstraintEqualTo(_containerGuide.RightAnchor),
 				_container.CenterXAnchor.ConstraintEqualTo(_containerGuide.CenterXAnchor),
 			});
 		}
@@ -127,8 +142,8 @@ namespace StormCollectionViews
 
 			(int minIndexToDisplay, int countToDisplay, nfloat topConstraint, nfloat bottomConstraint) = CalculateDisplayArea(minOffsetToDisplay, maxOffsetToDisplay, _sizes);
 			
-			_topContainerConstraint.Constant = topConstraint;
-			_bottomContainerConstraint.Constant = bottomConstraint;
+			_topContainerConstraint.Constant = topConstraint + ContentInset.Top;
+			_bottomContainerConstraint.Constant = bottomConstraint + ContentInset.Bottom;
 
 			if (_minimalDisplayedIndex < minIndexToDisplay) // can remove the top one 
 			{
@@ -168,8 +183,8 @@ namespace StormCollectionViews
 				_container.AddSubview(cell);
 				_container.AddConstraints(new[]
 				{
-					_container.WidthAnchor.ConstraintEqualTo(cell.WidthAnchor),
-					_container.CenterXAnchor.ConstraintEqualTo(cell.CenterXAnchor),
+					_containerGuide.WidthAnchor.ConstraintEqualTo(cell.WidthAnchor),
+					_containerGuide.CenterXAnchor.ConstraintEqualTo(cell.CenterXAnchor),
 				});
 
 				if (last is null)
@@ -221,8 +236,8 @@ namespace StormCollectionViews
 				_container.AddSubview(cell);
 				_container.AddConstraints(new[]
 				{
-					_container.WidthAnchor.ConstraintEqualTo(cell.WidthAnchor),
-					_container.CenterXAnchor.ConstraintEqualTo(cell.CenterXAnchor),
+					_containerGuide.WidthAnchor.ConstraintEqualTo(cell.WidthAnchor),
+					_containerGuide.CenterXAnchor.ConstraintEqualTo(cell.CenterXAnchor),
 				});
 
 				if (last is null)
@@ -307,6 +322,15 @@ namespace StormCollectionViews
 			{
 				throw new ArgumentOutOfRangeException(nameof(keyPath), keyPath, "Unsupported KVO notification keypath");
 			}
+		}
+
+		private void UpdateInsets()
+		{
+			_leftContainerConstraint.Constant = ContentInset.Left;
+			_rightContainerConstraint.Constant = ContentInset.Right;
+			
+			SetNeedsLayout();
+			LayoutIfNeeded();
 		}
 
 		public void DataChanged()

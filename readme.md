@@ -10,7 +10,7 @@ A project to recreate UICollectionView but working with AutoLayout and multiline
 - [x] cell virtualization
 - [x] cell recycling
 - [x] handling height change
-- [ ] content inset (padding for collection content)
+- [x] content inset (padding for collection content)
 - [ ] inset between lines
 - [ ] simple grid layout to create X column
 - [ ] inset between columns

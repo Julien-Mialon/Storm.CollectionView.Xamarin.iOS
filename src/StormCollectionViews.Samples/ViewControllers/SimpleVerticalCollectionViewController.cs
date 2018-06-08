@@ -9,7 +9,10 @@ namespace StormCollectionViews.Samples.ViewControllers
 	{
 		public SimpleVerticalCollectionViewController()
 		{
-			StormCollectionView collectionView = new StormCollectionView(80);
+			StormCollectionView collectionView = new StormCollectionView(80)
+			{
+				ContentInset = new UIEdgeInsets(20, 20, 20, 20)
+			};
 			DefaultStormCollectionViewSource<int, BackgroundCell> source = new DefaultStormCollectionViewSource<int, BackgroundCell>(collectionView, Bind);
 			source.Items = Enumerable.Range(0, 20).ToList();
 			collectionView.Source = source;
