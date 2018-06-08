@@ -1,0 +1,5 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|iPhoneSimulator' AND Exists('/Applications/Reveal.app/Contents/SharedSupport/iOS-Libraries/RevealServer.framework/Info.plist')">
+        <MtouchExtraArgs>$(MtouchExtraArgs) --framework:/Applications/Reveal.app/Contents/SharedSupport/iOS-Libraries/RevealServer.framework</MtouchExtraArgs>
+    </PropertyGroup>
+</Project>
