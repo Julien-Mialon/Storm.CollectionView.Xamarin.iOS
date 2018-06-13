@@ -6,17 +6,51 @@ using UIKit;
 
 namespace StormCollectionViews
 {
+	internal class RowContainer
+	{
+		public UILayoutGuide Guide { get; }
+
+		public UIView Cell { get; }
+
+		public RowContainer(UILayoutGuide guide, UIView cell)
+		{
+			Guide = guide;
+			Cell = cell;
+		}
+	}
+
+	public class LayoutGuideFactory
+	{
+		private readonly Queue<UILayoutGuide> _usables = new Queue<UILayoutGuide>();
+
+		public UILayoutGuide Get()
+		{
+			if (_usables.Count > 0)
+			{
+				return _usables.Dequeue();
+			}
+			
+			return new UILayoutGuide();
+		}
+
+		public void Recycle(UILayoutGuide guide)
+		{
+			_usables.Enqueue(guide);
+		}
+	}
+	
 	public class StormCollectionView : UIScrollView, IStormCollectionView
 	{
 		private const string SELECTOR_BOUNDS_SIZE = "bounds";
 		private readonly int _estimatedHeight;
 		private ICellFactory _factory;
+		private LayoutGuideFactory _guideFactory = new LayoutGuideFactory();
 		private IStormCollectionViewSource _source;
 
 		private UIEdgeInsets _contentInset;
 
-		private UIView _container;
-		private UILayoutGuide _containerGuide;
+		private UIView _scrollContent;
+		private UILayoutGuide _container;
 		
 		private NSLayoutConstraint _topContainerConstraint;
 		private NSLayoutConstraint _bottomContainerConstraint;
@@ -30,7 +64,8 @@ namespace StormCollectionViews
 		private int _minimalDisplayedIndex;
 		private int _maximumDisplayedIndex;
 
-		private List<UIView> _cells = new List<UIView>();
+		private List<RowContainer> _cells = new List<RowContainer>();
+		private float _rowInsets;
 		
 		public IStormCollectionViewSource Source
 		{
@@ -52,38 +87,49 @@ namespace StormCollectionViews
 			}
 		}
 
+		public float RowInsets
+		{
+			get => _rowInsets;
+			set
+			{
+				_rowInsets = value;
+				UpdateInsets();
+			}
+		}
+
 		public StormCollectionView(int estimatedHeight, ICellFactory factory = null)
 		{
 			_estimatedHeight = estimatedHeight;
 			_factory = factory ?? new DefaultCellFactory();
 
-			_container = new UIView
+			_scrollContent = new UIView
 			{
 				TranslatesAutoresizingMaskIntoConstraints = false,
 				BackgroundColor = UIColor.Red
 			};
-			_containerGuide = new UILayoutGuide
+			_container = new UILayoutGuide
 			{
 				Identifier = "ContainerGuide"
 			};
-			AddSubview(_container);
-			_container.AddLayoutGuide(_containerGuide);
+			
+			AddSubview(_scrollContent);
+			_scrollContent.AddLayoutGuide(_container);
 			
 			
 			AddConstraints(new []
 			{
-				WidthAnchor.ConstraintEqualTo(_container.WidthAnchor),
-				CenterXAnchor.ConstraintEqualTo(_container.CenterXAnchor),
-				TopAnchor.ConstraintEqualTo(_container.TopAnchor),
-				BottomAnchor.ConstraintEqualTo(_container.BottomAnchor)
+				WidthAnchor.ConstraintEqualTo(_scrollContent.WidthAnchor),
+				CenterXAnchor.ConstraintEqualTo(_scrollContent.CenterXAnchor),
+				TopAnchor.ConstraintEqualTo(_scrollContent.TopAnchor),
+				BottomAnchor.ConstraintEqualTo(_scrollContent.BottomAnchor)
 			});
-			_container.AddConstraints(new []
+			_scrollContent.AddConstraints(new []
 			{
-				_topContainerConstraint = _containerGuide.TopAnchor.ConstraintEqualTo(_container.TopAnchor),
-				_bottomContainerConstraint = _container.BottomAnchor.ConstraintEqualTo(_containerGuide.BottomAnchor),
-				_leftContainerConstraint = _containerGuide.LeftAnchor.ConstraintEqualTo(_container.LeftAnchor),
-				_rightContainerConstraint = _container.RightAnchor.ConstraintEqualTo(_containerGuide.RightAnchor),
-				_container.CenterXAnchor.ConstraintEqualTo(_containerGuide.CenterXAnchor),
+				_topContainerConstraint = _container.TopAnchor.ConstraintEqualTo(_scrollContent.TopAnchor),
+				_bottomContainerConstraint = _scrollContent.BottomAnchor.ConstraintEqualTo(_container.BottomAnchor),
+				_leftContainerConstraint = _container.LeftAnchor.ConstraintEqualTo(_scrollContent.LeftAnchor),
+				_rightContainerConstraint = _scrollContent.RightAnchor.ConstraintEqualTo(_container.RightAnchor),
+				_scrollContent.CenterXAnchor.ConstraintEqualTo(_container.CenterXAnchor),
 			});
 		}
 
@@ -172,28 +218,22 @@ namespace StormCollectionViews
 		{
 			if (_firstItemConstraint != null)
 			{
-				_container.RemoveConstraint(_firstItemConstraint);
+				_scrollContent.RemoveConstraint(_firstItemConstraint);
 			}
 
-			UIView last = _cells.FirstOrDefault();
+			RowContainer last = _cells.FirstOrDefault();
 			for (int cellIndex = _minimalDisplayedIndex - 1; cellIndex >= minIndexToDisplay; cellIndex--)
 			{
-				UIView cell = GetCell(cellIndex);
+				RowContainer cell = GetCell(cellIndex);
 				_cells.Insert(0, cell);
-				_container.AddSubview(cell);
-				_container.AddConstraints(new[]
-				{
-					_containerGuide.WidthAnchor.ConstraintEqualTo(cell.WidthAnchor),
-					_containerGuide.CenterXAnchor.ConstraintEqualTo(cell.CenterXAnchor),
-				});
-
+				
 				if (last is null)
 				{
-					_container.AddConstraint(_lastItemConstraint = _containerGuide.BottomAnchor.ConstraintEqualTo(cell.BottomAnchor));
+					_scrollContent.AddConstraint(_lastItemConstraint = _container.BottomAnchor.ConstraintEqualTo(cell.Guide.BottomAnchor));
 				}
 				else
 				{
-					_container.AddConstraint(cell.BottomAnchor.ConstraintEqualTo(last.TopAnchor));
+					_scrollContent.AddConstraint(cell.Guide.BottomAnchor.ConstraintEqualTo(last.Guide.TopAnchor));
 				}
 
 				last = cell;
@@ -201,7 +241,7 @@ namespace StormCollectionViews
 
 			if (last != null)
 			{
-				_container.AddConstraint(_firstItemConstraint = _containerGuide.TopAnchor.ConstraintEqualTo(last.TopAnchor));
+				_scrollContent.AddConstraint(_firstItemConstraint = _container.TopAnchor.ConstraintEqualTo(last.Guide.TopAnchor));
 			}
 		}
 
@@ -215,38 +255,32 @@ namespace StormCollectionViews
 
 			if (_firstItemConstraint != null)
 			{
-				_container.RemoveConstraint(_firstItemConstraint);
+				_scrollContent.RemoveConstraint(_firstItemConstraint);
 			}
 
 			_cells.RemoveRange(0, countToRemove);
 
 			if (_cells.Count > 0)
 			{
-				_container.AddConstraint(_firstItemConstraint = _containerGuide.TopAnchor.ConstraintEqualTo(_cells[0].TopAnchor));
+				_scrollContent.AddConstraint(_firstItemConstraint = _container.TopAnchor.ConstraintEqualTo(_cells[0].Guide.TopAnchor));
 			}
 		}
 
 		private void AddCellsBelow(int maxIndexToDisplay)
 		{
-			UIView last = _cells.LastOrDefault();
+			RowContainer last = _cells.LastOrDefault();
 			for (int cellIndex = _maximumDisplayedIndex; cellIndex < maxIndexToDisplay; cellIndex++)
 			{
-				UIView cell = GetCell(cellIndex);
+				RowContainer cell = GetCell(cellIndex);
 				_cells.Add(cell);
-				_container.AddSubview(cell);
-				_container.AddConstraints(new[]
-				{
-					_containerGuide.WidthAnchor.ConstraintEqualTo(cell.WidthAnchor),
-					_containerGuide.CenterXAnchor.ConstraintEqualTo(cell.CenterXAnchor),
-				});
-
+				
 				if (last is null)
 				{
-					_container.AddConstraint(_firstItemConstraint = _containerGuide.TopAnchor.ConstraintEqualTo(cell.TopAnchor));
+					_scrollContent.AddConstraint(_firstItemConstraint = _container.TopAnchor.ConstraintEqualTo(cell.Guide.TopAnchor));
 				}
 				else
 				{
-					_container.AddConstraint(cell.TopAnchor.ConstraintEqualTo(last.BottomAnchor));
+					_scrollContent.AddConstraint(cell.Guide.TopAnchor.ConstraintEqualTo(last.Guide.BottomAnchor));
 				}
 
 				last = cell;
@@ -256,10 +290,10 @@ namespace StormCollectionViews
 			{
 				if (_lastItemConstraint != null)
 				{
-					_container.RemoveConstraint(_lastItemConstraint);
+					_scrollContent.RemoveConstraint(_lastItemConstraint);
 				}
 
-				_container.AddConstraint(_lastItemConstraint = _containerGuide.BottomAnchor.ConstraintEqualTo(last.BottomAnchor));
+				_scrollContent.AddConstraint(_lastItemConstraint = _container.BottomAnchor.ConstraintEqualTo(last.Guide.BottomAnchor));
 			}
 		}
 
@@ -273,34 +307,56 @@ namespace StormCollectionViews
 
 			if (_lastItemConstraint != null)
 			{
-				_container.RemoveConstraint(_lastItemConstraint);
+				_scrollContent.RemoveConstraint(_lastItemConstraint);
 			}
 
 			_cells.RemoveRange(_cells.Count - countToRemove, countToRemove);
 
 			if (_cells.Count > 0)
 			{
-				_container.AddConstraint(_lastItemConstraint = _containerGuide.BottomAnchor.ConstraintEqualTo(_cells[_cells.Count - 1].BottomAnchor));
+				_scrollContent.AddConstraint(_lastItemConstraint = _container.BottomAnchor.ConstraintEqualTo(_cells[_cells.Count - 1].Guide.BottomAnchor));
 			}
 		}
 		
 		#endregion
 		
-		private UIView GetCell(int index)
+		private RowContainer GetCell(int index)
 		{
 			UIView cell = _source.GetCell(index, _factory);
 
 			cell.TranslatesAutoresizingMaskIntoConstraints = false;
 			cell.AddObserver(this, SELECTOR_BOUNDS_SIZE, NSKeyValueObservingOptions.Old, Handle);
+
+			UILayoutGuide guide = _guideFactory.Get();
 			
-			return cell;
+			_scrollContent.AddSubview(cell);
+			_scrollContent.AddLayoutGuide(guide);
+			
+			_scrollContent.AddConstraints(new []
+			{
+				//cell layout in guide
+				guide.CenterXAnchor.ConstraintEqualTo(cell.CenterXAnchor),
+				guide.CenterYAnchor.ConstraintEqualTo(cell.CenterYAnchor),
+				guide.WidthAnchor.ConstraintEqualTo(cell.WidthAnchor),
+				guide.HeightAnchor.ConstraintEqualTo(cell.HeightAnchor),
+				
+				//guide layout (width / centerX)
+				_container.WidthAnchor.ConstraintEqualTo(guide.WidthAnchor),
+				_container.CenterXAnchor.ConstraintEqualTo(guide.CenterXAnchor),
+			});
+			
+			return new RowContainer(guide, cell);
 		}
 
-		private void RemoveCell(UIView cell)
+		private void RemoveCell(RowContainer container)
 		{
-			cell.RemoveFromSuperview();
-			cell.RemoveObserver(this, SELECTOR_BOUNDS_SIZE, Handle);
-			_factory.Recycle(cell);
+			container.Cell.RemoveFromSuperview();
+			container.Cell.RemoveObserver(this, SELECTOR_BOUNDS_SIZE, Handle);
+			
+			_scrollContent.RemoveLayoutGuide(container.Guide);
+			
+			_factory.Recycle(container.Cell);
+			_guideFactory.Recycle(container.Guide);
 		}
 		
 		public override void ObserveValue(NSString keyPath, NSObject ofObject, NSDictionary change, IntPtr context)
@@ -315,7 +371,7 @@ namespace StormCollectionViews
 			{
 				for (int i = 0; i < _cells.Count; ++i)
 				{
-					_sizes[_minimalDisplayedIndex + i] = _cells[i].Bounds.Height;
+					_sizes[_minimalDisplayedIndex + i] = _cells[i].Cell.Bounds.Height;
 				}
 			}
 			else
@@ -346,7 +402,7 @@ namespace StormCollectionViews
 			{
 				_sizes[i] = _estimatedHeight;
 			}
-			
+
 			SetNeedsLayout();
 			LayoutIfNeeded();
 		}
