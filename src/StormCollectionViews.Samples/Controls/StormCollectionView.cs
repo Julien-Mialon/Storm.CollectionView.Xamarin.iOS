@@ -19,26 +19,6 @@ namespace StormCollectionViews
 		}
 	}
 
-	public class LayoutGuideFactory
-	{
-		private readonly Queue<UILayoutGuide> _usables = new Queue<UILayoutGuide>();
-
-		public UILayoutGuide Get()
-		{
-			if (_usables.Count > 0)
-			{
-				return _usables.Dequeue();
-			}
-			
-			return new UILayoutGuide();
-		}
-
-		public void Recycle(UILayoutGuide guide)
-		{
-			_usables.Enqueue(guide);
-		}
-	}
-	
 	public class StormCollectionView : UIScrollView, IStormCollectionView
 	{
 		private const string SELECTOR_BOUNDS_SIZE = "bounds";
@@ -135,7 +115,7 @@ namespace StormCollectionViews
 
 		#region Cells layout
 		
-		private static (int minIndexToDisplay, int countToDisplay, nfloat aboveHeight, nfloat belowHeight) CalculateDisplayArea(nfloat minOffsetToDisplay, nfloat maxOffsetToDisplay, nfloat[] sizes, float rowInset)
+		private static (int minIndexToDisplay, int countToDisplay, nfloat aboveHeight, nfloat belowHeight) CalculateDisplayArea(nfloat minOffsetToDisplay, nfloat maxOffsetToDisplay, nfloat[] sizes, nfloat rowInset)
 		{
 			int index = 0;
 			nfloat accumulatedHeight = 0;
@@ -146,16 +126,14 @@ namespace StormCollectionViews
 			{
 				aboveHeight = accumulatedHeight;
 				minIndexToDisplay = index;
-			}
+			}			
 
 			if (index == sizes.Length)
 			{
-				accumulatedHeight -= rowInset;
-				rowInset = 0;
+				return (minIndexToDisplay, 1, aboveHeight, 0);
 			}
 			
 			int maxIndexToDisplay = minIndexToDisplay;
-
 			for (; index < sizes.Length && accumulatedHeight <= maxOffsetToDisplay; accumulatedHeight += sizes[index] + rowInset, index++)
 			{
 				maxIndexToDisplay = index;
@@ -163,23 +141,16 @@ namespace StormCollectionViews
 			
 			if (index == sizes.Length)
 			{
-				accumulatedHeight -= rowInset;
-				rowInset = 0;
+				return (minIndexToDisplay, maxIndexToDisplay - minIndexToDisplay + 1, aboveHeight, 0);
 			}
 			
-			nfloat displayHeight = accumulatedHeight;
+			nfloat endOfDisplayHeight = accumulatedHeight;
 			
 			for (; index < sizes.Length; accumulatedHeight += sizes[index] + rowInset, index++) { }
 			
-			if (index == sizes.Length)
-			{
-				accumulatedHeight -= rowInset;
-			}
-			
-			nfloat belowHeight = accumulatedHeight - displayHeight;
+			nfloat belowHeight = accumulatedHeight - rowInset - endOfDisplayHeight;
 
 			int countToDisplay = maxIndexToDisplay - minIndexToDisplay + 1;
-			System.Diagnostics.Debug.WriteLine($"Display [{minIndexToDisplay} ; {maxIndexToDisplay}] {aboveHeight} -- {belowHeight}");
 			return (minIndexToDisplay, countToDisplay, aboveHeight, belowHeight);
 		}
 
@@ -347,6 +318,7 @@ namespace StormCollectionViews
 			cell.AddObserver(this, SELECTOR_BOUNDS_SIZE, NSKeyValueObservingOptions.Old, Handle);
 
 			UILayoutGuide guide = _guideFactory.Get();
+			guide.Identifier = $"Row {index}";
 			
 			_scrollContent.AddSubview(cell);
 			_scrollContent.AddLayoutGuide(guide);
@@ -406,9 +378,12 @@ namespace StormCollectionViews
 			
 			for (var i = 0; i < _scrollContent.Constraints.Length; i++)
 			{
-				var constraint = _scrollContent.Constraints[i];
+				NSLayoutConstraint constraint = _scrollContent.Constraints[i];
 
-				if (constraint.FirstAttribute == NSLayoutAttribute.Top && constraint.SecondAttribute == NSLayoutAttribute.Bottom)
+				if (constraint.FirstItem is UILayoutGuide &&
+				    constraint.FirstAttribute == NSLayoutAttribute.Top &&
+				    constraint.SecondItem is UILayoutGuide && 
+				    constraint.SecondAttribute == NSLayoutAttribute.Bottom)
 				{
 					constraint.Constant = _rowInsets;
 				}
