@@ -13,7 +13,7 @@ A project to recreate UICollectionView but working with AutoLayout and multiline
 - [x] content inset (padding for collection content)
 - [x] inset between lines
 - [x] simple grid layout to create X column
-- [ ] inset between columns
+- [x] inset between columns
 
 ## Must haves
 

@@ -34,6 +34,7 @@ namespace StormCollectionViews
 
 		private List<RowContainer> _cells = new List<RowContainer>();
 		private float _rowInsets;
+		private float _columnInsets;
 
 		public IStormCollectionViewSource Source
 		{
@@ -61,6 +62,16 @@ namespace StormCollectionViews
 			set
 			{
 				_rowInsets = value;
+				UpdateInsets();
+			}
+		}
+
+		public float ColumnInsets
+		{
+			get => _columnInsets;
+			set
+			{
+				_columnInsets = value;
 				UpdateInsets();
 			}
 		}
@@ -342,7 +353,7 @@ namespace StormCollectionViews
 				{
 					//cell layout in guide
 					guide.TopAnchor.ConstraintEqualTo(cell.TopAnchor),
-					guide.WidthAnchor.ConstraintEqualTo(cell.WidthAnchor, _columnCount, 0),
+					guide.WidthAnchor.ConstraintEqualTo(cell.WidthAnchor, _columnCount, (_columnCount - 1) * _columnInsets),
 				});
 
 				if (previous is null)
@@ -351,7 +362,7 @@ namespace StormCollectionViews
 				}
 				else
 				{
-					_scrollContent.AddConstraint(cell.LeftAnchor.ConstraintEqualTo(previous.RightAnchor));
+					_scrollContent.AddConstraint(cell.LeftAnchor.ConstraintEqualTo(previous.RightAnchor, _columnInsets));
 				}
 
 				previous = cell;
@@ -411,6 +422,22 @@ namespace StormCollectionViews
 				    constraint.SecondAttribute == NSLayoutAttribute.Bottom)
 				{
 					constraint.Constant = _rowInsets;
+				}
+				
+				if (constraint.FirstItem is UIView &&
+				    constraint.FirstAttribute == NSLayoutAttribute.Left &&
+				    constraint.SecondItem is UIView &&
+				    constraint.SecondAttribute == NSLayoutAttribute.Right)
+				{
+					constraint.Constant = _columnInsets;
+				}
+				
+				if (constraint.FirstItem is UILayoutGuide &&
+				    constraint.FirstAttribute == NSLayoutAttribute.Width &&
+				    constraint.SecondItem is UIView &&
+				    constraint.SecondAttribute == NSLayoutAttribute.Width)
+				{
+					constraint.Constant = (_columnCount - 1) * _columnInsets;
 				}
 			}
 
