@@ -135,28 +135,47 @@ namespace StormCollectionViews
 
 		#region Cells layout
 		
-		private static (int minIndexToDisplay, int countToDisplay, nfloat aboveHeight, nfloat belowHeight) CalculateDisplayArea(nfloat minOffsetToDisplay, nfloat maxOffsetToDisplay, nfloat[] sizes)
+		private static (int minIndexToDisplay, int countToDisplay, nfloat aboveHeight, nfloat belowHeight) CalculateDisplayArea(nfloat minOffsetToDisplay, nfloat maxOffsetToDisplay, nfloat[] sizes, float rowInset)
 		{
 			int index = 0;
 			nfloat accumulatedHeight = 0;
 			int minIndexToDisplay = 0;
 			nfloat aboveHeight = 0;
 
-			for (; index < sizes.Length && accumulatedHeight <= minOffsetToDisplay; accumulatedHeight += sizes[index], index++)
+			for (; index < sizes.Length && accumulatedHeight <= minOffsetToDisplay; accumulatedHeight += sizes[index] + rowInset, index++)
 			{
 				aboveHeight = accumulatedHeight;
 				minIndexToDisplay = index;
 			}
 
+			if (index == sizes.Length)
+			{
+				accumulatedHeight -= rowInset;
+				rowInset = 0;
+			}
+			
 			int maxIndexToDisplay = minIndexToDisplay;
 
-			for (; index < sizes.Length && accumulatedHeight <= maxOffsetToDisplay; accumulatedHeight += sizes[index], index++)
+			for (; index < sizes.Length && accumulatedHeight <= maxOffsetToDisplay; accumulatedHeight += sizes[index] + rowInset, index++)
 			{
 				maxIndexToDisplay = index;
 			}
+			
+			if (index == sizes.Length)
+			{
+				accumulatedHeight -= rowInset;
+				rowInset = 0;
+			}
+			
 			nfloat displayHeight = accumulatedHeight;
 			
-			for (; index < sizes.Length; accumulatedHeight += sizes[index], index++) { }
+			for (; index < sizes.Length; accumulatedHeight += sizes[index] + rowInset, index++) { }
+			
+			if (index == sizes.Length)
+			{
+				accumulatedHeight -= rowInset;
+			}
+			
 			nfloat belowHeight = accumulatedHeight - displayHeight;
 
 			int countToDisplay = maxIndexToDisplay - minIndexToDisplay + 1;
@@ -186,7 +205,7 @@ namespace StormCollectionViews
 
 			nfloat maxOffsetToDisplay = offset + displayHeight * 1.2f;
 
-			(int minIndexToDisplay, int countToDisplay, nfloat topConstraint, nfloat bottomConstraint) = CalculateDisplayArea(minOffsetToDisplay, maxOffsetToDisplay, _sizes);
+			(int minIndexToDisplay, int countToDisplay, nfloat topConstraint, nfloat bottomConstraint) = CalculateDisplayArea(minOffsetToDisplay, maxOffsetToDisplay, _sizes, _rowInsets);
 			
 			_topContainerConstraint.Constant = topConstraint + ContentInset.Top;
 			_bottomContainerConstraint.Constant = bottomConstraint + ContentInset.Bottom;
@@ -233,7 +252,7 @@ namespace StormCollectionViews
 				}
 				else
 				{
-					_scrollContent.AddConstraint(cell.Guide.BottomAnchor.ConstraintEqualTo(last.Guide.TopAnchor));
+					_scrollContent.AddConstraint(last.Guide.TopAnchor.ConstraintEqualTo(cell.Guide.BottomAnchor, _rowInsets));
 				}
 
 				last = cell;
@@ -280,7 +299,7 @@ namespace StormCollectionViews
 				}
 				else
 				{
-					_scrollContent.AddConstraint(cell.Guide.TopAnchor.ConstraintEqualTo(last.Guide.BottomAnchor));
+					_scrollContent.AddConstraint(cell.Guide.TopAnchor.ConstraintEqualTo(last.Guide.BottomAnchor, _rowInsets));
 				}
 
 				last = cell;
@@ -384,6 +403,16 @@ namespace StormCollectionViews
 		{
 			_leftContainerConstraint.Constant = ContentInset.Left;
 			_rightContainerConstraint.Constant = ContentInset.Right;
+			
+			for (var i = 0; i < _scrollContent.Constraints.Length; i++)
+			{
+				var constraint = _scrollContent.Constraints[i];
+
+				if (constraint.FirstAttribute == NSLayoutAttribute.Top && constraint.SecondAttribute == NSLayoutAttribute.Bottom)
+				{
+					constraint.Constant = _rowInsets;
+				}
+			}
 			
 			SetNeedsLayout();
 			LayoutIfNeeded();

@@ -11,7 +11,8 @@ namespace StormCollectionViews.Samples.ViewControllers
 		{
 			StormCollectionView collectionView = new StormCollectionView(80)
 			{
-				ContentInset = new UIEdgeInsets(20, 20, 20, 20)
+				ContentInset = new UIEdgeInsets(20, 20, 20, 20),
+				RowInsets = 12,
 			};
 			DefaultStormCollectionViewSource<int, BackgroundCell> source = new DefaultStormCollectionViewSource<int, BackgroundCell>(collectionView, Bind);
 			source.Items = Enumerable.Range(0, 20).ToList();
@@ -28,6 +29,8 @@ namespace StormCollectionViews.Samples.ViewControllers
 				NSLayoutConstraint.Create(View, Top, Equal, collectionView, Top, 1, 0), 
 				NSLayoutConstraint.Create(View, Bottom, Equal, collectionView, Bottom, 1, 0), 
 			});
+			
+			View.AddGestureRecognizer(new UITapGestureRecognizer(() => collectionView.RowInsets = 24));
 		}
 
 		private void Bind(int index, int item, BackgroundCell cell)
@@ -52,6 +55,7 @@ namespace StormCollectionViews.Samples.ViewControllers
 			{
 				BackgroundColor = UIColor.Purple
 			};
+			BackgroundColor = UIColor.DarkGray;
 			
 			AddSubview(content);
 			
