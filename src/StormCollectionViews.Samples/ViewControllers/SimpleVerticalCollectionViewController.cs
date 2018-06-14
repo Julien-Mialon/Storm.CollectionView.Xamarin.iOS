@@ -9,7 +9,7 @@ namespace StormCollectionViews.Samples.ViewControllers
 	{
 		public SimpleVerticalCollectionViewController()
 		{
-			StormCollectionView collectionView = new StormCollectionView(80)
+			StormCollectionView collectionView = new StormCollectionView(80, columnCount:2)
 			{
 				ContentInset = new UIEdgeInsets(20, 20, 20, 20),
 				RowInsets = 12,
@@ -61,8 +61,11 @@ namespace StormCollectionViews.Samples.ViewControllers
 			
 			_contentLabel = new UILabel
 			{
-				TextColor = UIColor.White
+				TextColor = UIColor.White,
+				Lines = 0,
+				LineBreakMode = UILineBreakMode.WordWrap,
 			};
+			
 			
 			content.AddSubview(_contentLabel);
 
