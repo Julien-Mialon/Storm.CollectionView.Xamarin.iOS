@@ -1,4 +1,5 @@
-﻿using UIKit;
+﻿using System;
+using UIKit;
 
 namespace StormCollectionViews
 {
@@ -6,12 +7,35 @@ namespace StormCollectionViews
 	{
 		public UILayoutGuide Guide { get; }
 
-		public UIView Cell { get; }
+		public UIView[] Cells { get; }
 
-		public RowContainer(UILayoutGuide guide, UIView cell)
+		public NSLayoutConstraint RowHeightConstraint { get; }
+
+		public RowContainer(UILayoutGuide guide, UIView[] cells, NSLayoutConstraint rowHeightConstraint)
 		{
 			Guide = guide;
-			Cell = cell;
+			Cells = cells;
+			RowHeightConstraint = rowHeightConstraint;
+		}
+
+		public nfloat UpdateHeight()
+		{
+			nfloat height = 0;
+			for (var i = 0; i < Cells.Length; i++)
+			{
+				nfloat cellHeight = Cells[i].Bounds.Height;
+				if (cellHeight > height)
+				{
+					height = cellHeight;
+				}
+			}
+
+			if (RowHeightConstraint.Constant != height)
+			{
+				RowHeightConstraint.Constant = height;
+			}
+
+			return height;
 		}
 	}
 }

@@ -10,6 +10,7 @@ namespace StormCollectionViews
 	{
 		private const string SELECTOR_BOUNDS_SIZE = "bounds";
 		private readonly int _estimatedHeight;
+		private readonly int _columnCount;
 		private ICellFactory _factory;
 		private LayoutGuideFactory _guideFactory = new LayoutGuideFactory();
 		private IStormCollectionViewSource _source;
@@ -18,7 +19,7 @@ namespace StormCollectionViews
 
 		private UIView _scrollContent;
 		private UILayoutGuide _container;
-		
+
 		private NSLayoutConstraint _topContainerConstraint;
 		private NSLayoutConstraint _bottomContainerConstraint;
 		private NSLayoutConstraint _leftContainerConstraint;
@@ -33,7 +34,8 @@ namespace StormCollectionViews
 
 		private List<RowContainer> _cells = new List<RowContainer>();
 		private float _rowInsets;
-		
+		private float _columnInsets;
+
 		public IStormCollectionViewSource Source
 		{
 			get => _source;
@@ -64,9 +66,20 @@ namespace StormCollectionViews
 			}
 		}
 
-		public StormCollectionView(int estimatedHeight, ICellFactory factory = null)
+		public float ColumnInsets
+		{
+			get => _columnInsets;
+			set
+			{
+				_columnInsets = value;
+				UpdateInsets();
+			}
+		}
+
+		public StormCollectionView(int estimatedHeight, int columnCount = 1, ICellFactory factory = null)
 		{
 			_estimatedHeight = estimatedHeight;
+			_columnCount = columnCount;
 			_factory = factory ?? new DefaultCellFactory();
 
 			_scrollContent = new UIView
@@ -78,19 +91,19 @@ namespace StormCollectionViews
 			{
 				Identifier = "ContainerGuide"
 			};
-			
+
 			AddSubview(_scrollContent);
 			_scrollContent.AddLayoutGuide(_container);
-			
-			
-			AddConstraints(new []
+
+
+			AddConstraints(new[]
 			{
 				WidthAnchor.ConstraintEqualTo(_scrollContent.WidthAnchor),
 				CenterXAnchor.ConstraintEqualTo(_scrollContent.CenterXAnchor),
 				TopAnchor.ConstraintEqualTo(_scrollContent.TopAnchor),
 				BottomAnchor.ConstraintEqualTo(_scrollContent.BottomAnchor)
 			});
-			_scrollContent.AddConstraints(new []
+			_scrollContent.AddConstraints(new[]
 			{
 				_topContainerConstraint = _container.TopAnchor.ConstraintEqualTo(_scrollContent.TopAnchor),
 				_bottomContainerConstraint = _scrollContent.BottomAnchor.ConstraintEqualTo(_container.BottomAnchor),
@@ -101,7 +114,7 @@ namespace StormCollectionViews
 		}
 
 		#region Cells layout
-		
+
 		private static (int minIndexToDisplay, int countToDisplay, nfloat aboveHeight, nfloat belowHeight) CalculateDisplayArea(nfloat minOffsetToDisplay, nfloat maxOffsetToDisplay, nfloat[] sizes, nfloat rowInset)
 		{
 			int index = 0;
@@ -113,28 +126,30 @@ namespace StormCollectionViews
 			{
 				aboveHeight = accumulatedHeight;
 				minIndexToDisplay = index;
-			}			
+			}
 
 			if (index == sizes.Length)
 			{
 				return (minIndexToDisplay, 1, aboveHeight, 0);
 			}
-			
+
 			int maxIndexToDisplay = minIndexToDisplay;
 			for (; index < sizes.Length && accumulatedHeight <= maxOffsetToDisplay; accumulatedHeight += sizes[index] + rowInset, index++)
 			{
 				maxIndexToDisplay = index;
 			}
-			
+
 			if (index == sizes.Length)
 			{
 				return (minIndexToDisplay, maxIndexToDisplay - minIndexToDisplay + 1, aboveHeight, 0);
 			}
-			
+
 			nfloat endOfDisplayHeight = accumulatedHeight;
-			
-			for (; index < sizes.Length; accumulatedHeight += sizes[index] + rowInset, index++) { }
-			
+
+			for (; index < sizes.Length; accumulatedHeight += sizes[index] + rowInset, index++)
+			{
+			}
+
 			nfloat belowHeight = accumulatedHeight - rowInset - endOfDisplayHeight;
 
 			int countToDisplay = maxIndexToDisplay - minIndexToDisplay + 1;
@@ -145,7 +160,7 @@ namespace StormCollectionViews
 		{
 			base.LayoutSubviews();
 
-			IStormCollectionViewSource source = Source;
+			IStormCollectionViewSource source = _source;
 			if (source is null)
 			{
 				return;
@@ -164,23 +179,25 @@ namespace StormCollectionViews
 			nfloat maxOffsetToDisplay = offset + displayHeight * 1.2f;
 
 			(int minIndexToDisplay, int countToDisplay, nfloat topConstraint, nfloat bottomConstraint) = CalculateDisplayArea(minOffsetToDisplay, maxOffsetToDisplay, _sizes, _rowInsets);
-			
+
 			_topContainerConstraint.Constant = topConstraint + ContentInset.Top;
 			_bottomContainerConstraint.Constant = bottomConstraint + ContentInset.Bottom;
 
+			int totalCellCount = source.Count;
+			
 			if (_minimalDisplayedIndex < minIndexToDisplay) // can remove the top one 
 			{
 				RemoveCellsAbove(minIndexToDisplay);
 			}
 			else if (_minimalDisplayedIndex > minIndexToDisplay) // need to add some on top
 			{
-				AddCellsAbove(minIndexToDisplay);
+				AddCellsAbove(minIndexToDisplay, totalCellCount, source);
 			}
 
 			int maxIndexToDisplay = minIndexToDisplay + countToDisplay;
 			if (_maximumDisplayedIndex < maxIndexToDisplay) // need to add some below 
 			{
-				AddCellsBelow(maxIndexToDisplay);
+				AddCellsBelow(maxIndexToDisplay, totalCellCount, source);
 			}
 			else if (_maximumDisplayedIndex > maxIndexToDisplay) // need to remove some on bottom
 			{
@@ -191,7 +208,7 @@ namespace StormCollectionViews
 			_maximumDisplayedIndex = maxIndexToDisplay;
 		}
 
-		private void AddCellsAbove(int minIndexToDisplay)
+		private void AddCellsAbove(int minIndexToDisplay, int totalCellCount, IStormCollectionViewSource source)
 		{
 			if (_firstItemConstraint != null)
 			{
@@ -201,9 +218,9 @@ namespace StormCollectionViews
 			RowContainer last = _cells.FirstOrDefault();
 			for (int cellIndex = _minimalDisplayedIndex - 1; cellIndex >= minIndexToDisplay; cellIndex--)
 			{
-				RowContainer cell = GetCell(cellIndex);
+				RowContainer cell = CreateRow(cellIndex, totalCellCount, source);
 				_cells.Insert(0, cell);
-				
+
 				if (last is null)
 				{
 					_scrollContent.AddConstraint(_lastItemConstraint = _container.BottomAnchor.ConstraintEqualTo(cell.Guide.BottomAnchor));
@@ -227,7 +244,7 @@ namespace StormCollectionViews
 			int countToRemove = minIndexToDisplay - _minimalDisplayedIndex;
 			for (int cellIndex = 0; cellIndex < countToRemove; cellIndex++)
 			{
-				RemoveCell(_cells[cellIndex]);
+				RemoveRow(_cells[cellIndex]);
 			}
 
 			if (_firstItemConstraint != null)
@@ -243,14 +260,14 @@ namespace StormCollectionViews
 			}
 		}
 
-		private void AddCellsBelow(int maxIndexToDisplay)
+		private void AddCellsBelow(int maxIndexToDisplay, int totalCellCount, IStormCollectionViewSource source)
 		{
 			RowContainer last = _cells.LastOrDefault();
 			for (int cellIndex = _maximumDisplayedIndex; cellIndex < maxIndexToDisplay; cellIndex++)
 			{
-				RowContainer cell = GetCell(cellIndex);
+				RowContainer cell = CreateRow(cellIndex, totalCellCount, source);
 				_cells.Add(cell);
-				
+
 				if (last is null)
 				{
 					_scrollContent.AddConstraint(_firstItemConstraint = _container.TopAnchor.ConstraintEqualTo(cell.Guide.TopAnchor));
@@ -279,7 +296,7 @@ namespace StormCollectionViews
 			int countToRemove = _maximumDisplayedIndex - maxIndexToDisplay;
 			for (int cellIndex = _cells.Count - countToRemove; cellIndex < _cells.Count; cellIndex++)
 			{
-				RemoveCell(_cells[cellIndex]);
+				RemoveRow(_cells[cellIndex]);
 			}
 
 			if (_lastItemConstraint != null)
@@ -294,49 +311,81 @@ namespace StormCollectionViews
 				_scrollContent.AddConstraint(_lastItemConstraint = _container.BottomAnchor.ConstraintEqualTo(_cells[_cells.Count - 1].Guide.BottomAnchor));
 			}
 		}
-		
+
 		#endregion
-		
-		private RowContainer GetCell(int index)
+
+		private RowContainer CreateRow(int rowIndex, int totalCellCount, IStormCollectionViewSource source)
 		{
-			UIView cell = _source.GetCell(index, _factory);
-
-			cell.TranslatesAutoresizingMaskIntoConstraints = false;
-			cell.AddObserver(this, SELECTOR_BOUNDS_SIZE, NSKeyValueObservingOptions.Old, Handle);
-
 			UILayoutGuide guide = _guideFactory.Get();
-			guide.Identifier = $"Row {index}";
-			
-			_scrollContent.AddSubview(cell);
+			guide.Identifier = $"Row {rowIndex}";
 			_scrollContent.AddLayoutGuide(guide);
-			
-			_scrollContent.AddConstraints(new []
+
+			NSLayoutConstraint rowHeightConstraint = guide.HeightAnchor.ConstraintEqualTo(_sizes[rowIndex]);
+
+			_scrollContent.AddConstraints(new[]
 			{
-				//cell layout in guide
-				guide.CenterXAnchor.ConstraintEqualTo(cell.CenterXAnchor),
-				guide.CenterYAnchor.ConstraintEqualTo(cell.CenterYAnchor),
-				guide.WidthAnchor.ConstraintEqualTo(cell.WidthAnchor),
-				guide.HeightAnchor.ConstraintEqualTo(cell.HeightAnchor),
-				
 				//guide layout (width / centerX)
 				_container.WidthAnchor.ConstraintEqualTo(guide.WidthAnchor),
 				_container.CenterXAnchor.ConstraintEqualTo(guide.CenterXAnchor),
+				rowHeightConstraint
 			});
-			
-			return new RowContainer(guide, cell);
+
+			int cellIndex = rowIndex * _columnCount;
+			int cellCount = totalCellCount - cellIndex;
+			if (cellCount > _columnCount)
+			{
+				cellCount = _columnCount;
+			}
+
+			UIView[] cells = new UIView[cellCount];
+			UIView previous = null;
+			for (int i = 0; i < cellCount; ++i)
+			{
+				UIView cell = source.GetCell(cellIndex + i, _factory);
+
+				cell.TranslatesAutoresizingMaskIntoConstraints = false;
+				cell.AddObserver(this, SELECTOR_BOUNDS_SIZE, NSKeyValueObservingOptions.Old, Handle);
+				cells[i] = cell;
+
+				_scrollContent.AddSubview(cell);
+
+				_scrollContent.AddConstraints(new[]
+				{
+					//cell layout in guide
+					guide.TopAnchor.ConstraintEqualTo(cell.TopAnchor),
+					guide.WidthAnchor.ConstraintEqualTo(cell.WidthAnchor, _columnCount, (_columnCount - 1) * _columnInsets),
+				});
+
+				if (previous is null)
+				{
+					_scrollContent.AddConstraint(guide.LeftAnchor.ConstraintEqualTo(cell.LeftAnchor));
+				}
+				else
+				{
+					_scrollContent.AddConstraint(cell.LeftAnchor.ConstraintEqualTo(previous.RightAnchor, _columnInsets));
+				}
+
+				previous = cell;
+			}
+
+			_scrollContent.AddConstraint(guide.RightAnchor.ConstraintEqualTo(previous.RightAnchor));
+
+			return new RowContainer(guide, cells, rowHeightConstraint);
 		}
 
-		private void RemoveCell(RowContainer container)
+		private void RemoveRow(RowContainer container)
 		{
-			container.Cell.RemoveFromSuperview();
-			container.Cell.RemoveObserver(this, SELECTOR_BOUNDS_SIZE, Handle);
-			
 			_scrollContent.RemoveLayoutGuide(container.Guide);
-			
-			_factory.Recycle(container.Cell);
 			_guideFactory.Recycle(container.Guide);
+
+			foreach (UIView cell in container.Cells)
+			{
+				cell.RemoveFromSuperview();
+				cell.RemoveObserver(this, SELECTOR_BOUNDS_SIZE, Handle);
+				_factory.Recycle(cell);
+			}
 		}
-		
+
 		public override void ObserveValue(NSString keyPath, NSObject ofObject, NSDictionary change, IntPtr context)
 		{
 			if (context != Handle)
@@ -349,7 +398,7 @@ namespace StormCollectionViews
 			{
 				for (int i = 0; i < _cells.Count; ++i)
 				{
-					_sizes[_minimalDisplayedIndex + i] = _cells[i].Cell.Bounds.Height;
+					_sizes[_minimalDisplayedIndex + i] = _cells[i].UpdateHeight();
 				}
 			}
 			else
@@ -362,34 +411,57 @@ namespace StormCollectionViews
 		{
 			_leftContainerConstraint.Constant = ContentInset.Left;
 			_rightContainerConstraint.Constant = ContentInset.Right;
-			
+
 			for (var i = 0; i < _scrollContent.Constraints.Length; i++)
 			{
 				NSLayoutConstraint constraint = _scrollContent.Constraints[i];
 
 				if (constraint.FirstItem is UILayoutGuide &&
 				    constraint.FirstAttribute == NSLayoutAttribute.Top &&
-				    constraint.SecondItem is UILayoutGuide && 
+				    constraint.SecondItem is UILayoutGuide &&
 				    constraint.SecondAttribute == NSLayoutAttribute.Bottom)
 				{
 					constraint.Constant = _rowInsets;
 				}
+				
+				if (constraint.FirstItem is UIView &&
+				    constraint.FirstAttribute == NSLayoutAttribute.Left &&
+				    constraint.SecondItem is UIView &&
+				    constraint.SecondAttribute == NSLayoutAttribute.Right)
+				{
+					constraint.Constant = _columnInsets;
+				}
+				
+				if (constraint.FirstItem is UILayoutGuide &&
+				    constraint.FirstAttribute == NSLayoutAttribute.Width &&
+				    constraint.SecondItem is UIView &&
+				    constraint.SecondAttribute == NSLayoutAttribute.Width)
+				{
+					constraint.Constant = (_columnCount - 1) * _columnInsets;
+				}
 			}
-			
+
 			SetNeedsLayout();
 			LayoutIfNeeded();
 		}
 
 		public void DataChanged()
 		{
-			if (Source is null)
+			IStormCollectionViewSource source = _source;
+			if (source is null)
 			{
 				return;
 			}
 
-			int count = _source.Count;
-			_sizes = new nfloat[count];
-			for (int i = 0; i < count; i++)
+			int totalCellCount = source.Count;
+			int rowCount = totalCellCount / _columnCount;
+			if (totalCellCount % _columnCount != 0)
+			{
+				rowCount++;
+			}
+
+			_sizes = new nfloat[rowCount];
+			for (int i = 0; i < rowCount; i++)
 			{
 				_sizes[i] = _estimatedHeight;
 			}
