@@ -66,6 +66,7 @@
     <Compile Include="Controls\IStormCollectionView.cs" />
     <Compile Include="Controls\IStormCollectionViewSource.cs" />
     <Compile Include="Controls\LayoutGuideFactory.cs" />
+    <Compile Include="Controls\RowContainer.cs" />
     <Compile Include="Controls\StormCollectionView.cs" />
     <Compile Include="Main.cs" />
     <Compile Include="AppDelegate.cs" />
